@@ -9,8 +9,10 @@
  * With --dir, every *.mp4 in the directory is used, sorted by filename — so
  * name them 01.mp4, 02.mp4, ... and the order takes care of itself.
  *
- * ffmpeg's concat demuxer with `-c copy` does not re-encode, which is what
- * keeps a joined film frame-exact and fast. It also does not check that the
+ * ffmpeg's concat demuxer with a video stream copy does not re-encode, which
+ * is what keeps a joined film frame-exact and fast. Audio is the exception: a
+ * stream copy keeps each section's AAC priming (~21ms), leaving a gap at every
+ * join, so audio is decoded and re-encoded once. It also does not check that the
  * inputs match. Give it a section whose pixel format or sample rate differs
  * and it writes a file that plays wrong, stops early, or drops audio after
  * the first join — with no error. So this script probes every input first and
@@ -142,6 +144,7 @@ function main() {
     files = fs
       .readdirSync(args.dir)
       .filter((f) => f.toLowerCase().endsWith(".mp4"))
+      .filter((f) => path.resolve(args.dir, f) !== path.resolve(args.out))
       .sort()
       .map((f) => path.join(args.dir, f));
   }
@@ -164,27 +167,31 @@ function main() {
   }
 
   assertParity(probes);
-  console.log("All sections match. Joining with a stream copy.");
+  console.log("All sections match. Joining (video stream copy, audio re-encoded once).");
 
-  const listPath = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), "brag-join-")),
-    "sections.txt"
-  );
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "brag-join-"));
+  // fail() exits the process, so clean up on exit rather than after the call.
+  process.on("exit", () => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const listPath = path.join(tmpDir, "sections.txt");
   fs.writeFileSync(listPath, concatList(files), "utf8");
 
   fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
 
   run("ffmpeg", [
+    "-hide_banner",
+    "-loglevel", "error",
     "-y",
     "-f", "concat",
     "-safe", "0",
     "-i", listPath,
-    "-c", "copy",
+    "-c:v", "copy",
+    // A stream copy keeps every section's AAC priming samples, which leaves
+    // ~21ms of silence at each join. Decoding drops them; re-encode once.
+    "-c:a", "aac",
+    "-b:a", "192k",
     "-movflags", "+faststart",
     args.out,
   ]);
-
-  fs.rmSync(path.dirname(listPath), { recursive: true, force: true });
 
   const joined = probe(args.out);
   const expected = probes.reduce((sum, p) => sum + p.duration, 0);
