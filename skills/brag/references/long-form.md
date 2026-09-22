@@ -7,9 +7,9 @@ This file is the sanctioned exception. Use it only when the user asks for a
 longer video, or passes `--sections`. Never reach for it on your own.
 
 The shape is: **one section per tone, rendered as its own clip, joined with
-ffmpeg `-c copy`.** Each section keeps the discipline of a normal brag — a hook,
-a hold, a reason to stay — and the tone changes with the story instead of
-staying flat for a minute.
+an ffmpeg video stream copy.** Each section keeps the discipline of a normal
+brag — a hook, a hold, a reason to stay — and the tone changes with the story
+instead of staying flat for a minute.
 
 ---
 
@@ -148,7 +148,7 @@ Then render each to its own file:
 
 ```bash
 for d in 0*/; do
-  (cd "$d" && npx hyperframes render -o "../../renders/${d%%-*}.mp4")
+  (cd "$d" && npx hyperframes render --quality high --output "../../renders/${d%%-*}.mp4")
 done
 ```
 
@@ -166,8 +166,13 @@ node skills/brag/scripts/join-sections.mjs \
 
 It probes every render, refuses to join if any two disagree on codec, width,
 height, pixel format, frame rate, audio codec, sample rate or channel count,
-then runs the concat demuxer with a stream copy and reports total frames and
-duration.
+then runs the concat demuxer with a video stream copy and reports total frames
+and duration.
+
+Audio is the one stream it re-encodes. A stream copy keeps each section's AAC
+priming samples (~21ms), which leaves a gap in the music bed at every join and
+lets audio drift behind video. Decoding drops them, so the helper re-encodes the
+audio once. Video stays a stream copy and stays frame-exact.
 
 The parity check is the whole point. `-c copy` on mismatched inputs does not
 error — it produces a file that plays wrong, or stops early, or loses audio

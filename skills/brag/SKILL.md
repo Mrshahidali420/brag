@@ -67,6 +67,9 @@ A single tone with `--sections` applies that tone to every section.
 user asks for a longer video, or passes `--sections`, or passes a `--duration`
 over 25 seconds. Never choose it yourself.
 
+With `--duration` but no `--sections`, plan `ceil(duration / 12)` sections,
+clamped to 4-6.
+
 When it is switched on, **read [references/long-form.md](references/long-form.md)
 before Step 1** and follow it alongside the four steps below. It changes what
 each step produces: the plan gains a section table, the composition step writes
